@@ -75,7 +75,7 @@ defmodule Parslet do
     tlen = String.length(text)
     fn doc ->
       if String.starts_with? doc, text do
-        {:ok, {:str, text}, String.slice(doc, tlen..-1)}
+        {:ok, text, String.slice(doc, tlen..-1)}
       else
         {:error, "'#{doc}' does not match string '#{text}'"}
       end
@@ -87,8 +87,28 @@ defmodule Parslet do
     fn doc ->
       case Regex.run(regex, doc) do
         nil -> {:error, "'#{doc}' does not match regex '#{regex_s}'"}
-        [match | _] -> {:ok, {:reg, match}, String.slice(doc, String.length(match)..-1)}
+        [match | _] -> {:ok, match, String.slice(doc, String.length(match)..-1)}
       end
+    end
+  end
+
+  def repeat(fun, min_count \\ 1) do
+    fn doc ->
+      repeat_aux(fun, min_count, doc, "")
+    end
+  end
+
+  def repeat_aux(fun, 0, doc, matched) do
+    case fun.(doc) do
+      {:ok, match, rest} -> repeat_aux(fun, 0, rest, matched <> match)
+      other -> {:ok, matched, doc}
+    end
+  end
+
+  def repeat_aux(fun, count, doc, matched) do
+    case fun.(doc) do
+      {:ok, match, rest} -> repeat_aux(fun, count - 1, rest, matched <> match)
+      other -> other
     end
   end
 
