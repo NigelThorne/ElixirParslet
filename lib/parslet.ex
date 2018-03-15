@@ -71,45 +71,76 @@ defmodule Parslet do
 
   # TODO ... checkout ("a" <> rest ) syntax...
   # https://stackoverflow.com/questions/25896762/how-can-pattern-matching-be-done-on-text
-  def str text do
-    tlen = String.length(text)
+  def str(text) do
+    str(&Parslet.identity/1, text)
+  end
+
+  def str(fun, text) do
     fn doc ->
-      if String.starts_with? doc, text do
-        {:ok, text, String.slice(doc, tlen..-1)}
+      call_aux(fun, doc, fn (doc, matched) -> str_aux(text, doc, matched) end )
+    end
+  end
+
+  def call_aux(fun, doc, aux) do
+    case fun.(doc) do
+      {:ok, match, rest} -> aux.(rest, match)
+      other -> other
+    end
+  end
+
+  def str_aux(text, doc, matched) do
+      tlen = String.length(text)
+      if String.starts_with?(doc, text) do
+        {:ok, matched <> text,  String.slice(doc, tlen..-1) }
       else
         {:error, "'#{doc}' does not match string '#{text}'"}
       end
+  end
+
+  def match(regex_s)  do
+    match(&Parslet.identity/1, regex_s)
+  end
+
+  def match(fun, regex_s)  do
+    fn doc ->
+      call_aux(fun, doc, fn (doc, matched) -> match_aux(regex_s, doc, matched) end )
     end
   end
 
-  def reg(regex_s) do
+  defp match_aux(regex_s, doc, matched) do
     regex = ~r{^#{regex_s}}
-    fn doc ->
-      case Regex.run(regex, doc) do
-        nil -> {:error, "'#{doc}' does not match regex '#{regex_s}'"}
-        [match | _] -> {:ok, match, String.slice(doc, String.length(match)..-1)}
-      end
+    case Regex.run(regex, doc) do
+      nil -> {:error, "'#{doc}' does not match regex '#{regex_s}'"}
+      [match | _] -> {:ok, matched <> match, String.slice(doc, String.length(match)..-1)}
     end
   end
 
-  def repeat(fun, min_count \\ 1) do
+  def repeat(fun, min_count) do
+    repeat(&Parslet.identity/1, fun, min_count)
+  end
+
+  def repeat(prev, fun, min_count) do
     fn doc ->
-      repeat_aux(fun, min_count, doc, "")
+      call_aux(prev, doc, fn (doc, matched) -> repeat_aux(fun, min_count, doc, matched) end )
     end
   end
 
-  def repeat_aux(fun, 0, doc, matched) do
+  defp repeat_aux(fun, 0, doc, matched) do
     case fun.(doc) do
       {:ok, match, rest} -> repeat_aux(fun, 0, rest, matched <> match)
-      other -> {:ok, matched, doc}
+      _ -> {:ok, matched, doc}
     end
   end
 
-  def repeat_aux(fun, count, doc, matched) do
+  defp repeat_aux(fun, count, doc, matched) do
     case fun.(doc) do
       {:ok, match, rest} -> repeat_aux(fun, count - 1, rest, matched <> match)
       other -> other
     end
+  end
+
+  def identity(doc) do
+    {:ok, "", doc}
   end
 
 end

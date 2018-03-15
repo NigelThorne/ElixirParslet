@@ -26,7 +26,7 @@ defmodule ParsletTest do
     use Parslet
 
     rule :test_regex do
-      reg("123")
+      match("123")
     end
 
     # calling another rule should just work. :)
@@ -37,7 +37,7 @@ defmodule ParsletTest do
     root :document
   end
 
-  test "regex" do
+  test "[123]" do
     assert ParsletExample2.parse("123") == {:ok, "123"}
     assert ParsletExample2.parse("w123") == {:error, "'w123' does not match regex '123'"}
     assert ParsletExample2.parse("234") == {:error, "'234' does not match regex '123'"}
@@ -49,16 +49,57 @@ defmodule ParsletTest do
     use Parslet
 
     rule :a do
-      str("a") |> repeat()
+      repeat(str("a"), 1)
     end
 
     root :a
   end
 
-  test "repeat repeats the previous function" do
+  test "a+" do
     assert ParsletExample3.parse("a") == {:ok, "a"}
     assert ParsletExample3.parse("aaaaaa") == {:ok, "aaaaaa"}
   end
 
+  defmodule ParsletExample4 do
+    use Parslet
+
+    rule :a do
+      str("a") |> str("b")
+    end
+
+    root :a
+  end
+
+  test "a > b = ab" do
+    assert ParsletExample4.parse("ab") == {:ok, "ab"}
+  end
+
+  defmodule ParsletExample5 do
+    use Parslet
+
+    rule :a do
+      repeat(str("a") |>  str("b") , 1)
+    end
+
+    root :a
+  end
+
+  test "(a > b)+" do
+    assert ParsletExample5.parse("ababab") == {:ok, "ababab"}
+  end
+
+   defmodule ParsletExample6 do
+    use Parslet
+
+    rule :a do
+      str("a") |> repeat(str("b"), 1)
+    end
+
+    root :a
+  end
+
+  test "a > b+" do
+    assert ParsletExample6.parse("abbbbb") == {:ok, "abbbbb"}
+  end
 
 end
