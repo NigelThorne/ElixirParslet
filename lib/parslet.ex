@@ -40,7 +40,6 @@ defmodule Parslet do
     end
   end
 
-  ## TODO: Add root command to define root symbol
   defmacro root(rule_name) do
     quote do
       # Prepend the newly defined test to the list of rules
@@ -59,8 +58,10 @@ defmodule Parslet do
         # Enum.each @rules, fn name ->
         #   IO.puts "Defined rule #{name}"
         # end
-        case apply(__MODULE__, @root, []).(document) do
-          {:ok, any, ""} -> {:ok , any}
+        parser = apply(__MODULE__, @root, [])
+        #IO.inspect  parser
+        case Parslet.apply_parser(parser, document) do
+          {:ok, any, ""}   -> {:ok , any}
           {:ok, any, rest} -> {:error, "Consumed #{inspect(any)}, but had the following remaining '#{rest}'"}
           error -> error
         end
@@ -68,46 +69,122 @@ defmodule Parslet do
     end
   end
 
+  @type parser_node ::
+      {:str, String.t}
+    | {:match, String.t}
+    | {:repeat, number, parser_node}
+    | {:absent?, parser_node}
+    | {:sequence, [parser_node]}
 
-  # TODO ... checkout ("a" <> rest ) syntax...
-  # https://stackoverflow.com/questions/25896762/how-can-pattern-matching-be-done-on-text
-  def str(text) do
-    str(&Parslet.identity/1, text)
+  @type unparsed_text :: String.t
+  @type parse_tree :: String.t
+  @type parsed_document  :: {atom, parse_tree, unparsed_text}
+  @type parser_function  :: (unparsed_text -> parsed_document)
+  @type matcher_function :: (unparsed_text, parse_tree -> parsed_document)
+
+
+  ## --- DSL --- ##
+
+  @spec str(String.t)                    :: parser_node
+  @spec match(String.t)                  :: parser_node
+  @spec repeat(parser_node, number)      :: parser_node
+  @spec absent?(parser_node)             :: parser_node
+
+  def str(text), do: {:str, text}
+  def match(regex_s), do: {:match, regex_s}
+  def repeat(fun, min_count), do: {:repeat, min_count, fun}
+  def absent?(fun), do: {:absent?, fun}
+
+  # These functions return a datastructure that represents a parser
+
+  @spec str(parser_node, String.t)                    :: parser_node
+  @spec match(parser_node, String.t)                  :: parser_node
+  @spec repeat(parser_node, parser_node, number)      :: parser_node
+  @spec absent?(parser_node, parser_node)             :: parser_node
+
+  def str(prev, text), do: {:sequence, [prev, str(text)]}
+  def match(prev, regex_s), do: {:sequence, [prev, match(regex_s)]}
+  def repeat(prev, fun, min_count), do: {:sequence, [prev, repeat(fun, min_count)]}
+  def absent?(prev, fun), do: {:sequence, [prev, absent?(fun)]}
+
+
+  @spec apply_parser(parser_node, unparsed_text, parse_tree)         :: parsed_document
+
+@doc ~S"""
+  Takes matches a string against a parser description.
+
+  ## Examples
+
+      iex> Parslet.apply_parser({:str, "test"}, "test", "")
+      {:ok, "test", ""}
+
+      iex> Parslet.apply_parser({:repeat, 0, {:str, "a"}}, "", "")
+      {:ok, "", ""}
+
+      iex> Parslet.apply_parser({:repeat, 0, {:str, "a"}}, "a", "")
+      {:ok, "a", ""}
+  """
+  def apply_parser(parse_node, document, matched \\ "")
+
+  def apply_parser({:str, text }, document, matched) do
+    str_matcher(text, document, matched)
   end
 
-  def str(fun, text) do
-    fn doc ->
-      call_aux(fun, doc, fn (doc, matched) -> str_aux(text, doc, matched) end )
+  def apply_parser({:match, regex_s }, document, matched) do
+    match_matcher(regex_s, document, matched)
+  end
+
+  def apply_parser({:repeat, num, subtree }, document, matched) do
+    repeat_matcher(
+      fn (doc)->
+        apply_parser(subtree, doc)
+      end, num, document, matched)
+  end
+
+  def apply_parser({:absent?, subtree}, document, matched) do
+    absent_matcher(
+      fn (doc)->
+        apply_parser(subtree, doc)
+      end, document, matched)
+  end
+
+  def apply_parser({:sequence, [] }, document, matched) do
+      {:ok, matched, document}
+  end
+
+
+  def apply_parser({:sequence, [subtree_head | subtree_rest] }, document, matched) do
+    case apply_parser(subtree_head, document, matched) do
+      {:ok, match, rest} -> apply_parser({:sequence, subtree_rest}, rest, match)
+      error -> error
     end
   end
 
-  def call_aux(fun, doc, aux) do
+  def apply_parser(error, _, _) do
+    error
+  end
+
+
+  @spec absent_matcher(parser_function, unparsed_text, parse_tree) :: parsed_document
+  defp absent_matcher(fun, doc, matched) do
     case fun.(doc) do
-      {:ok, match, rest} -> aux.(rest, match)
-      other -> other
+      {:ok, _, _} ->  {:error, "'#{doc}' does not match absent?(...) "}
+      _ -> {:ok, matched, doc}
     end
   end
 
-  def str_aux(text, doc, matched) do
-      tlen = String.length(text)
-      if String.starts_with?(doc, text) do
-        {:ok, matched <> text,  String.slice(doc, tlen..-1) }
-      else
-        {:error, "'#{doc}' does not match string '#{text}'"}
-      end
-  end
-
-  def match(regex_s)  do
-    match(&Parslet.identity/1, regex_s)
-  end
-
-  def match(fun, regex_s)  do
-    fn doc ->
-      call_aux(fun, doc, fn (doc, matched) -> match_aux(regex_s, doc, matched) end )
+  @spec str_matcher(String.t, unparsed_text, parse_tree) :: parsed_document
+  defp str_matcher(text, doc, matched) do
+    tlen = String.length(text)
+    if String.starts_with?(doc, text) do
+      {:ok, matched <> text,  String.slice(doc, tlen..-1) }
+    else
+      {:error, "'#{doc}' does not match string '#{text}'"}
     end
   end
 
-  defp match_aux(regex_s, doc, matched) do
+  @spec match_matcher(String.t, unparsed_text, parse_tree) :: parsed_document
+  defp match_matcher(regex_s, doc, matched) do
     regex = ~r{^#{regex_s}}
     case Regex.run(regex, doc) do
       nil -> {:error, "'#{doc}' does not match regex '#{regex_s}'"}
@@ -115,30 +192,22 @@ defmodule Parslet do
     end
   end
 
-  def repeat(fun, min_count) do
-    repeat(&Parslet.identity/1, fun, min_count)
-  end
-
-  def repeat(prev, fun, min_count) do
-    fn doc ->
-      call_aux(prev, doc, fn (doc, matched) -> repeat_aux(fun, min_count, doc, matched) end )
-    end
-  end
-
-  defp repeat_aux(fun, 0, doc, matched) do
+  @spec repeat_matcher(parser_function, number, unparsed_text, parse_tree) :: parsed_document
+  defp repeat_matcher(fun, 0, doc, matched) do
     case fun.(doc) do
-      {:ok, match, rest} -> repeat_aux(fun, 0, rest, matched <> match)
+      {:ok, match, rest} -> repeat_matcher(fun, 0, rest, matched <> match)
       _ -> {:ok, matched, doc}
     end
   end
 
-  defp repeat_aux(fun, count, doc, matched) do
+  defp repeat_matcher(fun, count, doc, matched) do
     case fun.(doc) do
-      {:ok, match, rest} -> repeat_aux(fun, count - 1, rest, matched <> match)
+      {:ok, match, rest} -> repeat_matcher(fun, count - 1, rest, matched <> match)
       other -> other
     end
   end
 
+  @spec identity(unparsed_text) :: parsed_document
   def identity(doc) do
     {:ok, "", doc}
   end

@@ -2,6 +2,7 @@ defmodule ParsletTest do
   use ExUnit.Case
   doctest Parslet
 
+
   defmodule ParsletExample do
     use Parslet
 
@@ -49,7 +50,7 @@ defmodule ParsletTest do
     use Parslet
 
     rule :a do
-      repeat(str("a"), 1)
+      repeat(str("a"),1)
     end
 
     root :a
@@ -78,7 +79,7 @@ defmodule ParsletTest do
     use Parslet
 
     rule :a do
-      repeat(str("a") |>  str("b") , 1)
+      repeat(str("a") |>  str("b"), 1)
     end
 
     root :a
@@ -102,4 +103,17 @@ defmodule ParsletTest do
     assert ParsletExample6.parse("abbbbb") == {:ok, "abbbbb"}
   end
 
+  defmodule ParsletExample7 do
+    use Parslet
+
+    rule :quoted_string do
+      str("\"") |> repeat( absent?(str("\"")) |> match("."), 1) |> str("\"")
+    end
+
+    root :quoted_string
+  end
+
+  test "absent?" do
+    assert ParsletExample7.parse("\"This is a string\"") == {:ok, "\"This is a string\""}
+  end
 end
