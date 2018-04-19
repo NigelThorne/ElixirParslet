@@ -113,8 +113,6 @@ defmodule Parslet do
   def absent?(prev, fun), do: {:sequence, [prev, absent?(fun)]}
   def as(prev, name, fun), do: {:sequence, [prev, as(name, fun)]}
 
-  @spec apply_parser(parser_node, unparsed_text, parse_tree)         :: parsed_document
-
 @doc ~S"""
   Takes matches a string against a parser description.
 
@@ -140,6 +138,7 @@ defmodule Parslet do
 
 
   """
+  @spec apply_parser(parser_node, unparsed_text, parse_tree)   :: parsed_document
   def apply_parser(parse_node, document, matched \\ "")
 
   def apply_parser({:str, text }, document, matched) do
@@ -195,6 +194,11 @@ defmodule Parslet do
   defp build_parse_tree(_, map) when is_map(map),  do: map
   defp build_parse_tree(ltree, rtree) when is_binary(ltree) and is_binary(rtree), do: ltree <> rtree
 
+  defp build_parse_list(map1, map2) when is_map(map1) and is_map(map2), do: [map1 , map2]
+  defp build_parse_list(ltree, rtree) when is_list(ltree), do: ltree + rtree
+  defp build_parse_list("", any), do: any
+  defp build_parse_list(ltree, rtree) when is_binary(ltree) and is_binary(rtree), do: ltree <> rtree
+
   @spec absent_matcher(parser_function, unparsed_text, parse_tree) :: parsed_document
   defp absent_matcher(fun, doc, matched) do
     case fun.(doc) do
@@ -225,14 +229,14 @@ defmodule Parslet do
   @spec repeat_matcher(parser_function, number, unparsed_text, parse_tree) :: parsed_document
   defp repeat_matcher(fun, 0, doc, matched) do
     case fun.(doc) do
-      {:ok, match, rest} -> repeat_matcher(fun, 0, rest, build_parse_tree( matched, match))
+      {:ok, match, rest} -> repeat_matcher(fun, 0, rest, build_parse_list( matched, match))
       _ -> {:ok, matched, doc}
     end
   end
 
   defp repeat_matcher(fun, count, doc, matched) do
     case fun.(doc) do
-      {:ok, match, rest} -> repeat_matcher(fun, count - 1, rest, build_parse_tree( matched, match))
+      {:ok, match, rest} -> repeat_matcher(fun, count - 1, rest, build_parse_list( matched, match))
       other -> other
     end
   end

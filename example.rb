@@ -3,7 +3,7 @@ require 'parslet'
 class Smalltalk < Parslet::Parser
     root :smalltalk
 
-    rule(:smalltalk) { str("test").as(:nigel) >> str("bob").as("fred")}
+    rule(:smalltalk) { str("a").as(:nigel).repeat(2)}
   end
 
-  puts Smalltalk.new.parse('testbob').inspect
+  puts Smalltalk.new.parse('aa').inspect
