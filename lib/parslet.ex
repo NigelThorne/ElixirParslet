@@ -76,6 +76,7 @@ defmodule Parslet do
     | {:repeat, number, parser_node}
     | {:absent?, parser_node}
     | {:sequence, [parser_node]}
+    | {:options, [parser_node]}
 
   @type unparsed_text :: String.t
   @type parse_tree ::
@@ -98,6 +99,12 @@ defmodule Parslet do
   def repeat(fun, min_count), do: {:repeat, min_count, fun}
   def absent?(fun), do: {:absent?, fun}
   def as(name, fun), do: {:as, name, fun}
+
+  defmacro left | right do
+    quote do
+      {:options, [unquote(left) , unquote(right)] }
+    end
+  end
 
   # These functions return a datastructure that represents a parser
 
@@ -173,6 +180,18 @@ defmodule Parslet do
       error -> error
     end
   end
+
+  def apply_parser({:options, [] }, document, _) do
+      {:error, "'#{document}' does not match options(...) "}
+  end
+
+  def apply_parser({:options, [h | t] }, document, matched) do
+    case apply_parser(h, document, matched) do
+      {:ok, match, rest} -> {:ok, match, rest}
+      _ -> apply_parser({:options, t}, document, matched)
+    end
+  end
+
 
   def apply_parser({:as, name, subtree }, document, matched) do
     case apply_parser(subtree, document) do
