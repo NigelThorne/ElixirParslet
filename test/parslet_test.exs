@@ -107,13 +107,25 @@ defmodule ParsletTest do
     use Parslet
 
     rule :quoted_string do
-      str("\"") |> repeat( absent?(str("\"")) |> match("."), 1) |> str("\"")
+      str("\"") |> as(:string, repeat( absent?(str("\"")) |> match("."), 1)) |> str("\"")
     end
+
+    rule :x do
+      as(:_x, str("x"))
+    end
+
+    rule :yx do
+     as(:_yx, str("y") |> x() )
+   end
 
     root :quoted_string
   end
 
   test "absent?" do
-    assert ParsletExample7.parse("\"This is a string\"") == {:ok, "\"This is a string\""}
+    assert ParsletExample7.parse("\"This is a string\"") == {:ok, %{:string => "This is a string"}}
+  end
+
+  test "as a in as b in as c" do
+    assert ParsletExample7.parse("yx", :yx) == {:ok, %{:_yx => %{:_x => "x"}}}
   end
 end
