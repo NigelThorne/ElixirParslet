@@ -39,9 +39,13 @@ defmodule ParsletTest do
     rule :yx, do: as(:_yx, str("y") |> x )
     rule :repeated_x, do: repeat(x(), 2)
 
-    rule :x_or_y, do: str("x") | str("y")
+    rule :x_or_y, do: one_of [str("x"), str("y")]
 
-    root :quoted_string
+    root :test_string
+  end
+
+  test "parse defaults to root rule" do
+    assert Parser.parse("test") == {:ok, "test"}
   end
 
   test "str matches whole string" do
@@ -93,6 +97,7 @@ defmodule ParsletTest do
   end
 
   test "repeated as in an as" do
+
     assert Parser.parse("xx", :repeated_x) == {:ok, [%{:_x => "x"}, %{:_x => "x"}]}
   end
 

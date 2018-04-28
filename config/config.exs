@@ -35,5 +35,6 @@ if Mix.env == :dev do
       "dialyzer",
     ],
     clear: true,
-    color: true
+    color: true,
+    timeout: 2
 end

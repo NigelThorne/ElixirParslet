@@ -13,7 +13,7 @@ defmodule Parslet do
       import Parslet
 
       # Initialize @tests to an empty list
-      @rules []
+      @rules %{}
       @root :undefined
 
       # Invoke Parslet.__before_compile__/1 before the module is compiled
@@ -33,12 +33,15 @@ defmodule Parslet do
   """
   defmacro rule(description, do: block) do
     function_name = description
-    quote do
+    aux_function_name = String.to_atom("_#{description}")
+    code = quote do
       # Prepend the newly defined test to the list of rules
-      @rules [unquote(function_name) | @rules]
-      def unquote(function_name)(), do: unquote(block)
+      def unquote(aux_function_name)(), do: unquote(block)
+      def unquote(function_name)(), do: {:call_rule, __MODULE__, unquote(function_name)}
       def unquote(function_name)(prev), do: {:sequence, [prev, unquote(function_name)()]}
     end
+    #IO.puts Macro.to_string(code)
+    code
   end
 
   defmacro root(rule_name) do
@@ -56,7 +59,7 @@ defmodule Parslet do
     quote do
       def parse(document, rule \\ @root) do
         # IO.puts "Root is defined as #{@root}"
-        # Enum.each @rules, fn name ->
+        # Enum.each @rules, fn (name, body) ->
         #   IO.puts "Defined rule #{name}"
         # end
         parser = apply(__MODULE__, rule, [])
@@ -77,6 +80,9 @@ defmodule Parslet do
     | {:absent?, parser_node}
     | {:sequence, [parser_node]}
     | {:options, [parser_node]}
+    | {:maybe, parser_node}
+    | {:as, atom, parser_node}
+    | {:call_rule, atom}
 
   @type unparsed_text :: String.t
   @type parse_tree ::
@@ -99,12 +105,8 @@ defmodule Parslet do
   def repeat(fun, min_count), do: {:repeat, min_count, fun}
   def absent?(fun), do: {:absent?, fun}
   def as(name, fun), do: {:as, name, fun}
-
-  defmacro left | right do
-    quote do
-      {:options, [unquote(left) , unquote(right)] }
-    end
-  end
+  def one_of(fun_list), do: {:options, fun_list}
+  def maybe(fun), do: {:maybe, fun}
 
   # These functions return a datastructure that represents a parser
 
@@ -119,6 +121,8 @@ defmodule Parslet do
   def repeat(prev, fun, min_count), do: {:sequence, [prev, repeat(fun, min_count)]}
   def absent?(prev, fun), do: {:sequence, [prev, absent?(fun)]}
   def as(prev, name, fun), do: {:sequence, [prev, as(name, fun)]}
+  def one_of(prev, options), do: {:sequence, [prev, one_of(options)]}
+  def maybe(prev, fun), do: {:sequence, [prev, maybe(fun)]}
 
 @doc ~S"""
   Takes matches a string against a parser description.
@@ -143,6 +147,18 @@ defmodule Parslet do
       iex> Parslet.apply_parser({:sequence, [{:as, :a, {:str, "x"}}, {:as, :b, {:str, "y"}}]}, "xy")
       {:ok, %{:a => "x", :b =>  "y"},""}
 
+      iex> Parslet.apply_parser({:maybe, {:str, "a"}}, "a")
+      {:ok, "a", ""}
+
+      iex> Parslet.apply_parser({:maybe, {:str, "a"}}, "")
+      {:ok, "", ""}
+
+      iex> Parslet.apply_parser({:sequence, [{:maybe, {:str, "a"}}, {:str, "b"}]}, "ab")
+      {:ok, "ab", ""}
+
+      iex> Parslet.apply_parser({:sequence, [{:maybe, {:str, "a"}}, {:str, "b"}]}, "b")
+      {:ok, "b", ""}
+
 
   """
   @spec apply_parser(parser_node, unparsed_text, parse_tree)   :: parsed_document
@@ -150,6 +166,10 @@ defmodule Parslet do
 
   def apply_parser({:str, text }, document, matched) do
     str_matcher(text, document, matched)
+  end
+
+  def apply_parser({:call_rule, module, rule}, document, matched) do
+    apply_parser(apply(module, String.to_atom("_#{rule}"), []), document, matched)
   end
 
   def apply_parser({:match, regex_s }, document, matched) do
@@ -192,6 +212,12 @@ defmodule Parslet do
     end
   end
 
+  def apply_parser({:maybe, subtree }, document, matched) do
+    case apply_parser(subtree, document, matched) do
+      {:ok, match, rest} -> {:ok, match, rest}
+      _ -> {:ok, matched, document}
+    end
+  end
 
   def apply_parser({:as, name, subtree }, document, matched) do
     case apply_parser(subtree, document) do
@@ -204,19 +230,20 @@ defmodule Parslet do
     error
   end
 
-
   #  If we only have strings, concatenate them.
   #  If we have a map, keep it
   #  If we have two maps, merge them
   defp build_parse_tree(map, rmap) when is_map(map) and is_map(rmap), do: Map.merge(map,rmap)
   defp build_parse_tree(map, _) when is_map(map),  do: map
   defp build_parse_tree(_, map) when is_map(map),  do: map
-  defp build_parse_tree(ltree, rtree) when is_binary(ltree) and is_binary(rtree), do: ltree <> rtree
+  defp build_parse_tree(ltree, rtree)
+      when is_binary(ltree)
+      and is_binary(rtree), do: ltree <> rtree
 
   defp build_parse_list(map1, map2) when is_map(map1) and is_map(map2), do: [map1 , map2]
   defp build_parse_list(ltree, rtree) when is_list(ltree), do: ltree + rtree
   defp build_parse_list("", any), do: any
-  defp build_parse_list(ltree, rtree) when is_binary(ltree) and is_binary(rtree), do: ltree <> rtree
+  defp build_parse_list(ltree, rtree), do: ltree <> rtree
 
   @spec absent_matcher(parser_function, unparsed_text, parse_tree) :: parsed_document
   defp absent_matcher(fun, doc, matched) do
