@@ -5,7 +5,9 @@ A port of Ruby's [Parslet](https://github.com/kschiess/parslet/) library to Erla
 # Done
 
 I have something similar to Parslet's "Parser" classes working. 
-I have a JSON parser working (without whitespace) as a proof of completeness. 
+I have a [JSON parser](parslet\test\json_parser_test.exs) working (without whitespace) as a proof of completeness. 
+
+See the tests for examples on how to use this module. 
 
 # Missing
 
@@ -17,7 +19,13 @@ The error handling is woeful. To be of use, this parser needs to pass around lin
 
 # Future 
 
-Primarily I am working on this to learn Elixir. In that endevor I want to make a version of this parser that uses GenServer and Actors to create a Parser Application from your code, so you can dispatch documents to it to parse. I forsee rules each build an actor, so the document gets passed around and gradually consumed.
+Primarily I am working on this to learn Elixir. 
+
+I want to learn OTP next, so I'm going to experiment with an OTP version next. I have been warned that this is a terrible idea for a real PEG parser generator due to the slow communications overhead. Given this is a toy for learning; sounds like I should learn a lot. 
+
+I haven't got my head around OTP yet, so here's my initial plan...
+
+I forsee rules each build an actor, so the document gets passed around and gradually consumed.
 
 Something that is missing from the original ... is the ability to run the parser in several modes.
 One mode is the production parser.. which just parses the document to data, so you can transform it, and should be really fast..

@@ -1,5 +1,5 @@
 # defmodule Parslet.Atoms do
-#   @doc """
+#  @moduledoc """
 #   Atoms are all methods that make the low level parser concepts.
 #   They should be methods give you back a function that
 #     takes a doc and returns you a {:ok, parsed_node, unparsed_text} or {:error, message}

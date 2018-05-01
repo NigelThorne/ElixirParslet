@@ -1,6 +1,8 @@
 defmodule ParsletV1 do
   @moduledoc """
-  Documentation for Parslet.
+  Documentation for ParsletV1.
+  This is my first version of Parslet parser...
+  I got stuck.. and decided to move to a solution that seperates the dsl from the evaluation.
   """
 
   # Callback invoked by `use`.
