@@ -1,8 +1,8 @@
 defmodule ExampleParserTests do
     use ExUnit.Case
-
+    import Transformer
     defmodule JSONParser do
-    use Parslet
+      use Parslet
         rule :value do
           one_of ([
             string(),
@@ -22,23 +22,26 @@ defmodule ExampleParserTests do
         end
 
         rule :string do
-            as(:string, (str("\"")
-            |>  as(:string_body, repeat(
-                    one_of( [
+            (str("\"")
+              |>  as(:string,
+                    repeat(
+                    as(:char, one_of( [
                         (absent?(str("\"")) |> absent?(str("\\")) |> match(".")),
                         (str("\\")
-                            |>  one_of(
+                            |>  as(:escaped, one_of(
                                 [
                                     match("[\"\\/bfnrt]"),
-                                    str("u")
-                                        |> match("a-fA-F0-9")
-                                        |> match("a-fA-F0-9")
-                                        |> match("a-fA-F0-9")
-                                        |> match("a-fA-F0-9")
-                                ])
+                                    (str("u")
+                                        |> match("[a-fA-F0-9]")
+                                        |> match("[a-fA-F0-9]")
+                                        |> match("[a-fA-F0-9]")
+                                        |> match("[a-fA-F0-9]"))
+                                ]))
                         )
-                    ]),0))
-            |> str("\"")))
+                    ])),0)
+                )
+              |> str("\""))
+
         end
 
         rule :digit, do: match("[0-9]")
@@ -83,47 +86,65 @@ defmodule ExampleParserTests do
 
     end
 
-  def transform(%{string_body: val}), do: val
-  def transform(%{string: val}), do: val
-  def transform(%{number: val}) do
-    {intVal, ""} = Float.parse(val)
-    intVal
-  end
+    defmodule JSONTransformer do
+      def transform(%{escaped: val}) do
+        {result, _} = Code.eval_string("\"\\#{val}\"")
+        result
+      end
+      def transform(%{char: val}) do
+        val
+      end
 
-  def transform(%{object: pairs}) when is_list(pairs) do
-    for %{pair: %{key: k, value: v}} <- pairs, into: %{}, do: {k,v}
-  end
+      def transform(%{string: val}) when is_list(val) do
+        List.to_string(val)
+        # Enum.join(val,"")
+      end
+      def transform(%{string: val}) do
+        val
+      end
+      def transform(%{number: val}) do
+        {intVal, ""} = Float.parse(val)
+        intVal
+      end
 
-  def transform(%{object: %{pair: %{key: k, value: v}}}) do
-    %{k => v}
-  end
+      def transform(%{object: pairs}) when is_list(pairs) do
+        for %{pair: %{key: k, value: v}} <- pairs, into: %{}, do: {k,v}
+      end
 
-  #default to leaving it untouched
-  def transform(any) do
-    any
-  end
+      def transform(%{object: %{pair: %{key: k, value: v}}}) do
+        %{k => v}
+      end
 
-  def transform_tree(map) when is_map(map) do
-      # take each pair, transform_tree the value, generate a new map from it.
-      # then transform the map.
-      transform(for {k, v} <- map, into: %{}, do: {k, transform_tree(v)})
-  end
+      #default to leaving it untouched
+      def transform(any) do
+        any
+      end
+    end
 
-  def transform_tree(list) when is_list(list) do
-      # transform_tree each value generate a new list from it.
-      # then transform the list
-      transform(Enum.map(list, &transform_tree/1))
-  end
-
-  # default to transfroming the value
-  def transform_tree(value) do
-    transform(value)
-  end
+    def parseJSON(document) do
+      {:ok, parsed} = JSONParser.parse(document)
+      #IO.inspect parsed
+      Transformer.transform_with(&JSONTransformer.transform/1, parsed)
+    end
 
   @tag timeout: 200
   test "parse json document" do
+    assert JSONParser.parse("\" \\nc \"", :string) ==
+     {:ok,
+             %{
+               string: [
+                 %{char: " "},
+                 %{char: %{escaped: "n"}},
+                 %{char: "c"},
+                 %{char: " "}
+               ]
+             }}
+
     assert JSONParser.parse("\"test\"", :string) ==
-      {:ok, %{ string: %{string_body: "test"}}}
+      {:ok, %{ string:  [%{char: "t"}, %{char: "e"}, %{char: "s"}, %{char: "t"}]}}
+
+      assert JSONParser.parse("\"\\u26C4\"", :string) ==
+      {:ok, %{ string: %{char: %{escaped: "u26C4"}}}}
 
     assert JSONParser.parse("123", :number) ==
       {:ok, %{number: "123"}}
@@ -133,72 +154,13 @@ defmodule ExampleParserTests do
 
     assert JSONParser.parse("{}", :object) ==
       {:ok, %{object: "{}"}}
-
-    assert JSONParser.parse("{\"bob\":111,\"jane\":234}", :object) ==
-      {:ok,
-             %{
-               object: [
-                 %{
-                   pair: %{
-                     key: %{string: %{string_body: "bob"}},
-                     value: %{number: "111"}
-                   }
-                 },
-                 %{
-                   pair: %{
-                     key: %{string: %{string_body: "jane"}},
-                     value: %{number: "234"}
-                   }
-                 }
-               ]
-             }
-            }
-
-    assert JSONParser.parse("{\"bob\":{\"jane\":234}}", :object) ==
-      {:ok,
-        %{
-          object: %{
-            pair: %{
-              key: %{string: %{string_body: "bob"}},
-              value: %{
-                object: %{
-                  pair: %{
-                    key: %{string: %{string_body: "jane"}},
-                    value: %{number: "234"}
-                  }
-                }
-              }
-            }
-          }
-        }}
-
-
-    assert JSONParser.parse("{\"bob\":{\"jane\":234}}") ==
-      {:ok,
-        %{
-          object: %{
-            pair: %{
-              key: %{string: %{string_body: "bob"}},
-              value: %{
-                object: %{
-                  pair: %{
-                    key: %{string: %{string_body: "jane"}},
-                    value: %{number: "234"}
-                  }
-                }
-              }
-            }
-          }
-        }}
-
     assert JSONParser.parse("[1,2,3,4]") ==
       {:ok, %{array: [%{number: "1"},%{number: "2"},%{number: "3"},%{number: "4"}]}}
   end
 
   test "transformed doc" do
-    {:ok, parsed} = JSONParser.parse("{\"bob\":{\"jane\":234},\"freddy\":\"a\"}")
-    assert transform_tree(parsed) ==
-      %{"bob" => %{"jane" => 234},"freddy" => "a"}
+    assert parseJSON(~S({"bob":{"jane":234},"fre\r\n\t\u26C4ddy":"a"})) ==
+                  %{"bob" => %{"jane" => 234.0},"fre\r\n\t⛄ddy" => "a"}
   end
 
 end

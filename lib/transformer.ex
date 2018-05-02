@@ -1,64 +1,25 @@
 defmodule Transformer do
-  @moduledoc """
-  Documentation for Parslet.
-  """
 
-  # Callback invoked by `use`.
-  #
-  # For now it returns a quoted expression that
-  # imports the module itself into the user code.
-  @doc false
-  defmacro __using__(_opts) do
-    quote do
-      import Transformer
-
-      # Initialize @rules to an empty list
-      @rules %{}
-
-      # Invoke Transformer.__before_compile__/1 before the module is compiled
-      @before_compile Transformer
-    end
+  defp transform_tree(map, transform_aux) when is_map(map) do
+      # take each pair, transform_tree the value, generate a new map from it.
+      # then transform the map.
+      transform_aux.(for {k, v} <- map, into: %{}, do: {k, transform_tree(v, transform_aux)})
   end
 
-  @doc """
-  Defines a test case with the given description.
-
-  ## Examples
-
-      rule(:string => simple(:x)) do
-        StringLiteral.new(x)
-      end
-
-  """
-  defmacro rule(description, do: block) do
-    function_name = description
-    aux_function_name = String.to_atom("_#{description}")
-    code = quote do
-      # Prepend the newly defined test to the list of rules
-      def unquote(aux_function_name)(), do: unquote(block)
-      def unquote(function_name)(), do: {:call_rule, __MODULE__, unquote(function_name)}
-      def unquote(function_name)(prev), do: {:sequence, [prev, unquote(function_name)()]}
-    end
-    #IO.puts Macro.to_string(code)
-    code
+  defp transform_tree(list, transform_aux) when is_list(list) do
+      # transform_tree each value generate a new list from it.
+      # then transform the list
+      transform_aux.(Enum.map(list, fn(val) -> transform_tree(val, transform_aux) end))
   end
 
-  @doc false
-  defmacro __before_compile__(_env) do
-    quote do
-      def apply(document) do
-        # Depth first transformation.
-
-        # IO.inspect  parser
-        case Transformer.apply(parser, document) do
-          {:ok, any, ""}   -> {:ok , any}
-          {:ok, any, rest} -> {:error, "Consumed #{inspect(any)}, but had the following remaining '#{rest}'"}
-          error -> error
-        end
-      end
-    end
+  # default to transfroming the value
+  defp transform_tree(value, transform_aux) do
+    transform_aux.(value)
   end
 
+  def transform_with(method, val) do
+    transform_tree(val, method)
+  end
 
 
 
