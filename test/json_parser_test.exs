@@ -201,7 +201,7 @@ defmodule ExampleParserTests do
     assert parseJSON(~S({"bob":{"jane":234},"fre\r\n\t\u26C4ddy":"a"})) ==
                   %{"bob" => %{"jane" => 234.0},"fre\r\n\t⛄ddy" => "a"}
 
-    #TODO... handle whitespace.
+
     IO.inspect parseJSON(~S(
       {"web-app": {
   "servlet": [
