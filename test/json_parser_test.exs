@@ -9,8 +9,12 @@ defmodule ExampleParserTests do
             object(),
             array(),
             boolean(),
-            str("null")
+            null(),
             ])
+        end
+
+        rule :null do
+          as(:null, str("null"))
         end
 
         rule :boolean do
@@ -103,26 +107,14 @@ defmodule ExampleParserTests do
         result
       end
 
-      def transform(%{char: val}) do
-        val
-      end
-
-      def transform(%{array: val}) do
-        val
-      end
-
       def transform(%{string: val}) when is_list(val) do
         List.to_string(val)
       end
-
-      def transform(%{string: val}) do
-        val
-      end
-
-      def transform(%{boolean: val}) do
-        val
-      end
-
+      def transform(%{string: val}), do: val
+      def transform(%{char: val}), do: val
+      def transform(%{array: val}), do: val
+      def transform(%{null: "null"}), do: :null  #replace null with :null
+      def transform(%{boolean: val}), do: val == "true"
 
       def transform(%{number: %{integer: val, decimal: "", exponent: ""}}) do
          {intVal, ""} = Integer.parse("#{val}")
@@ -143,10 +135,8 @@ defmodule ExampleParserTests do
       end
 
       #default to leaving it untouched
-      def transform(any) do
+      def transform(any), do: any
 
-        any
-      end
     end
 
 
@@ -158,11 +148,17 @@ defmodule ExampleParserTests do
 
   test "number" do
     assert JSONParser.parse("123", :number) == {:ok, %{number: %{decimal: "", exponent: "", integer: "123"}}}
-
-
     assert JSONParser.parse("-102.22e+34", :number) ==
       {:ok, %{number: %{decimal: ".22", exponent: "e+34", integer: "-102"}}}
 
+  end
+
+  test "boolean" do
+        assert JSONParser.parse("true", :boolean) == {:ok, %{boolean: "true"}}
+        assert JSONParser.parse("false", :boolean) == {:ok, %{boolean: "false"}}
+
+        assert JSONTransformer.transform(%{boolean: "false"}) == false
+        assert JSONTransformer.transform(%{boolean: "true"}) == true
   end
 
   test "parse json document" do
@@ -217,7 +213,7 @@ defmodule ExampleParserTests do
         "templateProcessorClass": "org.cofax.WysiwygTemplate",
         "templateLoaderClass": "org.cofax.FilesTemplateLoader",
         "templatePath": "templates",
-        "templateOverridePath": "",
+        "templateOverridePath": null,
         "defaultListTemplate": "listTemplate.htm",
         "defaultFileTemplate": "articleTemplate.htm",
         "useJSP": false,
