@@ -234,11 +234,13 @@ defmodule Parslet do
   #  If we have a map, keep it
   #  If we have two maps, merge them
   defp build_parse_tree(map, rmap) when is_map(map) and is_map(rmap), do: Map.merge(map,rmap)
+ # defp build_parse_tree(list, list2) when is_list(list) and is_list(list2), do: list ++ list2
+  # defp build_parse_tree(list, map) when is_list(list) and is_map(map), do: list ++ [map]
+  # defp build_parse_tree(map, list) when is_list(list) and is_map(map), do: [map] ++ list
+  defp build_parse_tree(list, _) when is_list(list), do: list
+  #defp build_parse_tree(_, list) when is_list(list), do: list
   defp build_parse_tree(map, _) when is_map(map),  do: map
   defp build_parse_tree(_, map) when is_map(map),  do: map
-  defp build_parse_tree(list, list2) when is_list(list) and is_list(list2), do: list ++ list2
-  defp build_parse_tree(list, _) when is_list(list), do: list
-  defp build_parse_tree(_, list) when is_list(list), do: list
 
   defp build_parse_tree(ltree, rtree)
       when is_binary(ltree)
@@ -247,7 +249,17 @@ defmodule Parslet do
   defp build_parse_list("", any), do: any
   defp build_parse_list(map1, map2) when is_map(map1) and is_map(map2), do: [map1 , map2]
   defp build_parse_list([h|t], rtree) when is_map(h) and is_map(rtree), do: [h|t] ++ [rtree]
-  defp build_parse_list(ltree, rtree), do: ltree <> rtree
+  defp build_parse_list(map1, _) when is_map(map1), do: map1
+  defp build_parse_list(_, map2) when is_map(map2), do: map2
+  defp build_parse_list(ltree, rtree) do
+    # IO.puts "\nltree:"
+    # IO.inspect ltree
+    # IO.puts "rtree:"
+    # IO.inspect rtree
+
+    ltree <> rtree
+
+  end
 
   @spec absent_matcher(parser_function, unparsed_text, parse_tree) :: parsed_document
   defp absent_matcher(fun, doc, matched) do
