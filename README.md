@@ -202,7 +202,7 @@ That didn't work. This still doesn't capture "World".
 This is because `as` just gives a name to what's being returned by the parser. We already know we are missing the word 'World'
 
 Let's try again. 
-```
+```elixir
     rule :greetings do
       salutation()
       |> str(" ")
