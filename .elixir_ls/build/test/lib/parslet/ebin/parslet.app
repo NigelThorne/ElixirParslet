@@ -1,8 +1,9 @@
 {application,parslet,
-             [{applications,[kernel,stdlib,elixir,logger]},
+             [{config_mtime,1723031646},
+              {optional_applications,[]},
+              {applications,[kernel,stdlib,elixir,logger]},
               {description,"parslet"},
               {modules,['Elixir.Parslet','Elixir.SimpleXML',
                         'Elixir.SimpleXML.Parser','Elixir.Transformer']},
               {registered,[]},
-              {vsn,"0.1.0"},
-              {extra_applications,[logger]}]}.
+              {vsn,"0.1.0"}]}.

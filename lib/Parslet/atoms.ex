@@ -45,7 +45,7 @@
 #       tlen = String.length(text)
 
 #       if String.starts_with?(doc, text) do
-#         {:ok, text, String.slice(doc, tlen..-1)}
+#         {:ok, text, String.slice(doc, tlen..-1//1)}
 #       else
 #         {:error, "'#{doc}' does not match string '#{text}'"}
 #       end
@@ -61,7 +61,7 @@
 #           {:error, "'#{doc}' does not match regex '#{regex_s}'"}
 
 #         [match | _] ->
-#           {:ok, match, String.slice(doc, String.length(match)..-1)}
+#           {:ok, match, String.slice(doc, String.length(match)..-1//1)}
 #       end
 #     end
 #   end
