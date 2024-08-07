@@ -95,6 +95,7 @@ end
 `str` is a parser that matches a static string
 We get a success and we get the matched text back.
 
+When it doesn't match it will tell you what went wrong. 
 ```elixir
 test "parse greeting" do
   assert GreetingParse.parse(~S(Hi World)) == {:ok, "Hello World"}
@@ -109,7 +110,6 @@ end
     stacktrace:
       test/simple_parser_test.exs:15: (test)
 ```
-When it doesnt match it will tell you what went wrong. 
 
 
 So let's make it allow both
