@@ -1,204 +1,225 @@
 defmodule ExampleParserTests do
-    use ExUnit.Case
-    defmodule JSONParser do
-      use Parslet
-        rule :value do
-          one_of ([
-            string(),
-            number(),
-            object(),
-            array(),
-            boolean(),
-            null(),
+  use ExUnit.Case
+
+  defmodule JSONParser do
+    use Parslet
+
+    rule :value do
+      one_of([
+        string(),
+        number(),
+        object(),
+        array(),
+        boolean(),
+        null()
+      ])
+    end
+
+    rule :null do
+      as(:null, str("null"))
+    end
+
+    rule :boolean do
+      as(
+        :boolean,
+        one_of([
+          str("true"),
+          str("false")
+        ])
+      )
+    end
+
+    rule :sp_ do
+      repeat(match("[\s\r\n]"), 0)
+    end
+
+    rule :string do
+      str("\"")
+      |> as(
+        :string,
+        repeat(
+          as(
+            :char,
+            one_of([
+              absent?(str("\"")) |> absent?(str("\\")) |> match("."),
+              str("\\")
+              |> as(
+                :escaped,
+                one_of([
+                  match("[\"\\/bfnrt]"),
+                  str("u")
+                  |> match("[a-fA-F0-9]")
+                  |> match("[a-fA-F0-9]")
+                  |> match("[a-fA-F0-9]")
+                  |> match("[a-fA-F0-9]")
+                ])
+              )
             ])
-        end
-
-        rule :null do
-          as(:null, str("null"))
-        end
-
-        rule :boolean do
-          as(:boolean, one_of ([
-            str("true"),
-            str("false"),
-          ]))
-        end
-
-        rule :sp_ do
-          repeat(match("[\s\r\n]"), 0)
-        end
-
-        rule :string do
-            (str("\"")
-              |>  as(:string,
-                    repeat(
-                    as(:char, one_of( [
-                        (absent?(str("\"")) |> absent?(str("\\")) |> match(".")),
-                        (str("\\")
-                            |>  as(:escaped, one_of(
-                                [
-                                    match("[\"\\/bfnrt]"),
-                                    (str("u")
-                                        |> match("[a-fA-F0-9]")
-                                        |> match("[a-fA-F0-9]")
-                                        |> match("[a-fA-F0-9]")
-                                        |> match("[a-fA-F0-9]"))
-                                ]))
-                        )
-                    ])),0)
-                )
-              |> str("\""))
-
-        end
-
-        rule :digit, do: match("[0-9]")
-
-        rule :number do
-            as(:number,
-                as(:integer, maybe(str("-")) |>
-                  one_of([
-                      str("0"),
-                      (match("[1-9]") |> repeat( digit(), 0 ))
-                  ])) |>
-                as(:decimal,
-                    maybe(str(".") |> repeat( digit(), 1 ))
-                  ) |>
-                as(:exponent,
-                  maybe(
-                    one_of( [str("e"), str("E")] ) |>
-                        maybe( one_of( [ str("+"), str("-") ] )) |>
-                            repeat( digit(), 1)
-                  )
-                )
-            )
-        end
-
-        rule :key_value_pair do
-            as(:pair, as(:key, string()) |> sp_() |> str(":") |> sp_() |> as(:value, value()))
-        end
-
-        rule :object do
-            as(:object, str("{") |> sp_() |>
-             maybe(
-                 key_value_pair() |>  repeat(  sp_() |> str(",") |> sp_() |> key_value_pair(), 0)
-                 ) |> sp_() |>
-            str("}"))
-        end
-
-        rule :array do
-          as(:array, str("[") |> sp_() |>
-             maybe(
-                 value() |>  repeat( sp_() |> str(",") |> sp_() |> value(), 0)
-                 ) |> sp_() |>
-          str("]"))
-        end
-
-        rule :document do
-          sp_() |> value |> sp_()
-        end
-
-        root :document
-
+          ),
+          0
+        )
+      )
+      |> str("\"")
     end
 
-    defmodule JSONTransformer do
-      def transform(%{escaped: val}) do
-        {result, _} = Code.eval_string("\"\\#{val}\"")
-        result
-      end
+    rule(:digit, do: match("[0-9]"))
 
-      def transform(%{string: val}) when is_list(val) do
-        List.to_string(val)
-      end
-      def transform(%{string: val}), do: val
-      def transform(%{char: val}), do: val
-      def transform(%{array: val}), do: val
-      def transform(%{null: "null"}), do: :null  #replace null with :null
-      def transform(%{boolean: val}), do: val == "true"
-
-      def transform(%{number: %{integer: val, decimal: "", exponent: ""}}) do
-         {intVal, ""} = Integer.parse("#{val}")
-         intVal
-      end
-
-      def transform(%{number: %{integer: val, decimal: dec, exponent: ex}}) do
-        {intVal, ""} = Float.parse("#{val}#{dec}#{ex}")
-        intVal
-      end
-
-      def transform(%{object: pairs}) when is_list(pairs) do
-        for %{pair: %{key: k, value: v}} <- pairs, into: %{}, do: {k,v}
-      end
-
-      def transform(%{object: %{pair: %{key: k, value: v}}}) do
-        %{k => v}
-      end
-
-      #default to leaving it untouched
-      def transform(any), do: any
-
+    rule :number do
+      as(
+        :number,
+        as(
+          :integer,
+          maybe(str("-"))
+          |> one_of([
+            str("0"),
+            match("[1-9]") |> repeat(digit(), 0)
+          ])
+        )
+        |> as(
+          :decimal,
+          maybe(str(".") |> repeat(digit(), 1))
+        )
+        |> as(
+          :exponent,
+          maybe(
+            one_of([str("e"), str("E")])
+            |> maybe(one_of([str("+"), str("-")]))
+            |> repeat(digit(), 1)
+          )
+        )
+      )
     end
 
+    rule :key_value_pair do
+      as(:pair, as(:key, string()) |> sp_() |> str(":") |> sp_() |> as(:value, value()))
+    end
+
+    rule :object do
+      as(
+        :object,
+        str("{")
+        |> sp_()
+        |> maybe(key_value_pair() |> repeat(sp_() |> str(",") |> sp_() |> key_value_pair(), 0))
+        |> sp_()
+        |> str("}")
+      )
+    end
+
+    rule :array do
+      as(
+        :array,
+        str("[")
+        |> sp_()
+        |> maybe(value() |> repeat(sp_() |> str(",") |> sp_() |> value(), 0))
+        |> sp_()
+        |> str("]")
+      )
+    end
+
+    rule :document do
+      sp_() |> value |> sp_()
+    end
+
+    root(:document)
+  end
+
+  defmodule JSONTransformer do
+    def transform(%{escaped: val}) do
+      {result, _} = Code.eval_string("\"\\#{val}\"")
+      result
+    end
+
+    def transform(%{string: val}) when is_list(val) do
+      List.to_string(val)
+    end
+
+    def transform(%{string: val}), do: val
+    def transform(%{char: val}), do: val
+    def transform(%{array: val}), do: val
+    # replace null with :null
+    def transform(%{null: "null"}), do: :null
+    def transform(%{boolean: val}), do: val == "true"
+
+    def transform(%{number: %{integer: val, decimal: "", exponent: ""}}) do
+      {intVal, ""} = Integer.parse("#{val}")
+      intVal
+    end
+
+    def transform(%{number: %{integer: val, decimal: dec, exponent: ex}}) do
+      {intVal, ""} = Float.parse("#{val}#{dec}#{ex}")
+      intVal
+    end
+
+    def transform(%{object: pairs}) when is_list(pairs) do
+      for %{pair: %{key: k, value: v}} <- pairs, into: %{}, do: {k, v}
+    end
+
+    def transform(%{object: %{pair: %{key: k, value: v}}}) do
+      %{k => v}
+    end
+
+    # default to leaving it untouched
+    def transform(any), do: any
+  end
 
   @tag timeout: 200
 
   test "sp" do
-        assert JSONParser.parse("  ", :sp_) == {:ok, "  "}
+    assert JSONParser.parse("  ", :sp_) == {:ok, "  "}
   end
 
   test "number" do
-    assert JSONParser.parse("123", :number) == {:ok, %{number: %{decimal: "", exponent: "", integer: "123"}}}
-    assert JSONParser.parse("-102.22e+34", :number) ==
-      {:ok, %{number: %{decimal: ".22", exponent: "e+34", integer: "-102"}}}
+    assert JSONParser.parse("123", :number) ==
+             {:ok, %{number: %{decimal: "", exponent: "", integer: "123"}}}
 
+    assert JSONParser.parse("-102.22e+34", :number) ==
+             {:ok, %{number: %{decimal: ".22", exponent: "e+34", integer: "-102"}}}
   end
 
   test "boolean" do
-        assert JSONParser.parse("true", :boolean) == {:ok, %{boolean: "true"}}
-        assert JSONParser.parse("false", :boolean) == {:ok, %{boolean: "false"}}
+    assert JSONParser.parse("true", :boolean) == {:ok, %{boolean: "true"}}
+    assert JSONParser.parse("false", :boolean) == {:ok, %{boolean: "false"}}
 
-        assert JSONTransformer.transform(%{boolean: "false"}) == false
-        assert JSONTransformer.transform(%{boolean: "true"}) == true
+    assert JSONTransformer.transform(%{boolean: "false"}) == false
+    assert JSONTransformer.transform(%{boolean: "true"}) == true
   end
 
   test "parse json document" do
     assert JSONParser.parse("\" \\nc \"", :string) ==
-     {:ok,
-             %{
-               string: [
-                 %{char: " "},
-                 %{char: %{escaped: "n"}},
-                 %{char: "c"},
-                 %{char: " "}
-               ]
-             }}
+             {:ok,
+              %{
+                string: [
+                  %{char: " "},
+                  %{char: %{escaped: "n"}},
+                  %{char: "c"},
+                  %{char: " "}
+                ]
+              }}
 
     assert JSONParser.parse("\"test\"", :string) ==
-      {:ok, %{ string:  [%{char: "t"}, %{char: "e"}, %{char: "s"}, %{char: "t"}]}}
+             {:ok, %{string: [%{char: "t"}, %{char: "e"}, %{char: "s"}, %{char: "t"}]}}
 
-      assert JSONParser.parse("\"\\u26C4\"", :string) ==
-      {:ok, %{ string: %{char: %{escaped: "u26C4"}}}}
+    assert JSONParser.parse("\"\\u26C4\"", :string) ==
+             {:ok, %{string: %{char: %{escaped: "u26C4"}}}}
 
     assert JSONParser.parse("{}", :object) ==
-      {:ok, %{object: "{}"}}
+             {:ok, %{object: "{}"}}
 
-      # assert JSONParser.parse("[1,2,3,4]") ==
-      # {:ok, %{array: [%{number: "1"},%{number: "2"},%{number: "3"},%{number: "4"}]}}
+    # assert JSONParser.parse("[1,2,3,4]") ==
+    # {:ok, %{array: [%{number: "1"},%{number: "2"},%{number: "3"},%{number: "4"}]}}
   end
 
-      def parseJSON(document) do
-      {:ok, parsed} = JSONParser.parse(document)
-      #IO.inspect parsed
-      Transformer.transform_with(&JSONTransformer.transform/1, parsed)
-    end
-
+  def parseJSON(document) do
+    {:ok, parsed} = JSONParser.parse(document)
+    # IO.inspect parsed
+    Transformer.transform_with(&JSONTransformer.transform/1, parsed)
+  end
 
   test "transformed doc" do
     assert parseJSON(~S({"bob":{"jane":234},"fre\r\n\t\u26C4ddy":"a"})) ==
-                  %{"bob" => %{"jane" => 234.0},"fre\r\n\t⛄ddy" => "a"}
+             %{"bob" => %{"jane" => 234.0}, "fre\r\n\t⛄ddy" => "a"}
 
-
-    IO.inspect parseJSON(~S(
+    json = parseJSON(~S(
       {"web-app": {
   "servlet": [
     {
@@ -287,8 +308,9 @@ defmodule ExampleParserTests do
   "taglib": {
     "taglib-uri": "cofax.tld",
     "taglib-location": "/WEB-INF/tlds/cofax.tld"}}}
-    )
-    )
-  end
+    ))
 
+    # IO.inspect(json)
+    json
+  end
 end

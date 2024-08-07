@@ -3,7 +3,6 @@
               {optional_applications,[]},
               {applications,[kernel,stdlib,elixir,logger]},
               {description,"parslet"},
-              {modules,['Elixir.Parslet','Elixir.SimpleXML',
-                        'Elixir.SimpleXML.Parser','Elixir.Transformer']},
+              {modules,['Elixir.Parslet','Elixir.Transformer']},
               {registered,[]},
               {vsn,"0.1.0"}]}.
